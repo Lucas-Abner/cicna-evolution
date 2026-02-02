@@ -19,7 +19,7 @@ class WebhookData(BaseModel):
 
 EVOLUTION_URL = "http://localhost:8080"
 EVOLUTION_API_KEY = os.getenv("AUTHENTICATION_API_KEY")
-INSTANCE = "lucas"
+INSTANCE = os.getenv("INSTANCE_NAME")
 
 if not EVOLUTION_API_KEY:
     raise ValueError("AUTHENTICATION_API_KEY não encontrada no .env")
@@ -100,6 +100,13 @@ async def receive_webhook(request: Request):
                 "dados_completos": webhook.data
             })
             print(f"💬 Mensagem recebida: ", mensagens_recebidas)
+
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post("http://localhost:8001/api/v1/webhook/whatsapp", json=webhook.data)
+                    print(f"📦 Resposta da API: {response.json()}")
+            except Exception as e:
+                print(f"❌ Erro ao enviar mensagens: {e}")
     else:
         print(f"⚠️ Evento ignorado: {webhook.event}")
             
