@@ -93,17 +93,12 @@ async def receive_webhook(request: Request):
         
         if texto_usuario:
             # Armazenar mensagem
-            mensagens_recebidas.append({
-                "telefone": remote_jid,
-                "mensagem": texto_usuario,
-                "timestamp": datetime.now().isoformat(),
-                "dados_completos": webhook.data
-            })
+            mensagens_recebidas.append({**data})
             print(f"💬 Mensagem recebida: ", mensagens_recebidas)
 
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.post("http://localhost:8001/api/v1/webhook/whatsapp", json=webhook.data)
+                    response = await client.post("http://localhost:8001/api/v1/webhook/whatsapp", json=data)
                     print(f"📦 Resposta da API: {response.json()}")
             except Exception as e:
                 print(f"❌ Erro ao enviar mensagens: {e}")
@@ -118,14 +113,20 @@ async def receive_webhook_messages_upsert(request: Request):
     return await receive_webhook(request)
 
 @app.get("/api/mensagens")
-async def listar_mensagens(telefone:str=None):
+async def listar_mensagens(telefone: str | None = None):
     """Lista mensagens recebidas de um número específico."""
     if telefone:
-        mensagens_filtradas = [msg for msg in mensagens_recebidas if msg["telefone"] == telefone]
-    return mensagens_filtradas
+        return [msg for msg in mensagens_recebidas if msg["telefone"] == telefone]
+    return mensagens_recebidas
 
 @app.delete("/api/mensagens/limpar")
 async def limpar_mensagens():
     """Limpa todas as mensagens armazenadas."""
     mensagens_recebidas.clear()
     return {"status": "limpo"}
+
+if __name__ == "__main__":
+    import uvicorn
+    host_api = str(os.getenv("HOST_API"))
+    port_api = int(os.getenv("PORT_API"))
+    uvicorn.run("main:app", host=host_api, port=port_api, reload=True)

@@ -149,21 +149,32 @@ Lá você pode:
 
 ### 5. Descubra o IP da sua máquina
 
+**IMPORTANTE:** O Evolution está no Docker, então precisa do IP real da sua máquina (não localhost).
+
 ```bash
 # Linux/Mac
 hostname -I | awk '{print $1}'
 
 # Ou
 ip route get 1 | awk '{print $NF;exit}'
+
+# Windows (PowerShell)
+Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -like "*Ethernet*" -or $_.InterfaceAlias -like "*Wi-Fi*"} | Select-Object IPAddress
 ```
 
-Anote o IP (exemplo: `192.168.1.100`)
+**Anote o IP retornado** (exemplo: `192.168.1.100` ou `10.0.0.100`).
+
+**Não use:**
+- ❌ `localhost`
+- ❌ `127.0.0.1`
+- ❌ `host.docker.internal` (não funciona em todos os ambientes)
 
 ### 6. Configure o webhook na sua instância
 
 **IMPORTANTE:** 
 - Use o IP da sua máquina (não localhost) porque o Evolution está no Docker
 - Substitua `minha_instancia` pelo nome que você escolheu
+- Substitua `SEU_IP_AQUI` pelo IP que você descobriu
 
 ```bash
 curl -X POST http://localhost:8080/webhook/set/minha_instancia \
@@ -179,10 +190,6 @@ curl -X POST http://localhost:8080/webhook/set/minha_instancia \
   }'
 ```
 
-**Substitua:**
-- `minha_instancia` → Nome da sua instância
-- `SEU_IP_AQUI` → IP que você descobriu no passo anterior
-
 ### 7. Verifique se o webhook foi configurado
 
 ```bash
@@ -190,9 +197,20 @@ curl -X GET http://localhost:8080/webhook/find/minha_instancia \
   -H "apikey: dale"
 ```
 
+Deve retornar algo como:
+```json
+{
+  "enabled": true,
+  "url": "http://192.168.1.100:8000/webhook/process",
+  "events": ["MESSAGES_UPSERT"]
+}
+```
+
 ## 🎮 Uso
 
 ### Inicie o servidor
+
+**IMPORTANTE:** Use `--host 0.0.0.0` para que o Docker possa acessar seu servidor.
 
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -204,6 +222,11 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 INFO:     Application startup complete.
 ```
 
+**Por que `--host 0.0.0.0`?** 
+- Permite conexões de qualquer interface de rede
+- Essencial para que o Evolution (no Docker) possa acessar seu webhook
+- Sem isso, só aceita conexões locais (`127.0.0.1`)
+
 ### Teste se está funcionando
 
 ```bash
@@ -214,6 +237,15 @@ Deve retornar:
 ```json
 {"mensagem": "O Bot está ONLINE! 🟢"}
 ```
+
+### Teste a conectividade do Docker
+
+```bash
+# Substitua SEU_IP_REAL pelo IP que você descobriu
+docker exec -it evolution_api curl http://SEU_IP_REAL:8000/
+```
+
+Se retornar `{"mensagem": "O Bot está ONLINE! 🟢"}`, a conectividade está funcionando!
 
 ### Envie uma mensagem de teste
 
@@ -429,6 +461,46 @@ O arquivo `.env` não foi carregado. Certifique-se que:
 1. Verifique se o servidor está rodando com `--host 0.0.0.0`
 2. Envie uma mensagem de teste via curl (veja seção [Teste Manual](#teste-manual))
 3. Verifique se não há firewall bloqueando a porta 8000
+4. Teste a conectividade do Docker: `docker exec -it evolution_api curl http://SEU_IP:8000/`
+5. Verifique se o webhook está configurado com o IP correto (não `localhost` ou `host.docker.internal`)
+
+### ❌ Erro "connect ECONNREFUSED 10.0.2.217:8000" ou IP estranho
+
+O webhook está configurado com IP errado. O Evolution está tentando acessar `10.0.2.217` (IP interno do Docker).
+
+**Solução:**
+
+1. **Descubra seu IP real:**
+```bash
+hostname -I | awk '{print $1}'
+```
+
+2. **Reconfigure o webhook com o IP correto:**
+```bash
+# Substitua "minha_instancia" e "SEU_IP_REAL"
+curl -X POST http://localhost:8080/webhook/set/minha_instancia \
+  -H "Content-Type: application/json" \
+  -H "apikey: dale" \
+  -d '{
+    "webhook": {
+      "enabled": true,
+      "url": "http://SEU_IP_REAL:8000/webhook/process",
+      "events": ["MESSAGES_UPSERT"]
+    }
+  }'
+```
+
+3. **Certifique-se que o servidor está rodando:**
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+4. **Teste a conectividade:**
+```bash
+curl http://SEU_IP_REAL:8000/
+```
+
+Deve retornar `{"mensagem": "O Bot está ONLINE! 🟢"}`.
 
 ## 🧪 Teste Manual
 
